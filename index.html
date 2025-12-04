@@ -3,32 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI ตรวจจับวัตถุ</title>
+    <title>YOLOv8 AI Counter 🚀</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        body { font-family: sans-serif; padding: 20px; text-align: center; }
-        .container { max-width: 800px; margin: 0 auto; }
-        #imageWrapper { position: relative; display: inline-block; margin-top: 20px; }
-        img { max-width: 100%; display: block; }
-        canvas { position: absolute; top: 0; left: 0; }
-        .loading { color: blue; font-weight: bold; display: none; }
+        /* กำหนดสีหลักและตัวแปร */
+        :root {
+            --primary-color: #007bff;     /* สีน้ำเงินหลัก */
+            --secondary-color: #343a40;  /* สีเข้มสำหรับข้อความ */
+            --background-color: #f8f9fa; /* พื้นหลังอ่อน */
+            --card-background: #ffffff; /* พื้นหลังการ์ด */
+            --success-color: #28a745;    /* สีเขียวสำหรับผลลัพธ์ */
+            --error-color: #dc3545;      /* สีแดงสำหรับ Error */
+            --loading-color: #ffc107;    /* สีเหลืองสำหรับ Loading */
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body { 
+            font-family: 'Poppins', sans-serif; 
+            background-color: var(--background-color);
+            padding: 40px 15px; 
+            text-align: center; 
+            min-height: 100vh;
+        }
+
+        .container { 
+            max-width: 900px; 
+            margin: 0 auto; 
+            background-color: var(--card-background);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+        }
+
+        h1 {
+            color: var(--secondary-color);
+            font-weight: 700;
+            margin-bottom: 5px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+            font-weight: 400;
+        }
+
+        /* ------------------ Input/Button Style ------------------ */
+        .upload-area {
+            padding: 30px;
+            border: 2px dashed #ced4da;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .upload-area:hover {
+            border-color: var(--primary-color);
+            background-color: #f0f4f8;
+        }
+        
+        #uploadInput {
+            display: none;
+        }
+
+        .custom-upload-btn {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 18px;
+            font-weight: 600;
+            box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
+            transition: background-color 0.3s ease;
+        }
+        .upload-area:hover .custom-upload-btn {
+            background-color: #0056b3;
+        }
+
+        /* ------------------ Status/Result Style ------------------ */
+        #statusDisplay {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: 600;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        .status-loading { 
+            background-color: var(--loading-color); 
+            color: #495057; 
+            display: block !important; 
+            opacity: 1 !important;
+        }
+        .status-error {
+            background-color: var(--error-color);
+            color: white;
+            display: block !important; 
+            opacity: 1 !important;
+        }
+        .status-success {
+            background-color: var(--success-color);
+            color: white;
+            font-size: 20px;
+            display: block !important;
+            opacity: 1 !important;
+        }
+
+        /* ------------------ Image Display ------------------ */
+        #imageWrapper { 
+            position: relative; 
+            display: none; /* ซ่อนจนกว่าจะอัปโหลดรูป */
+            margin-top: 25px; 
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+            max-height: 70vh; /* จำกัดความสูงไม่ให้ยาวเกินไป */
+        }
+
+        #previewImage { 
+            width: 100%;
+            height: auto; 
+            display: block; 
+        }
+
+        #overlayCanvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>ระบบนับสินค้าด้วย AI (YOLOv8)</h1>
-        <input type="file" id="uploadInput" accept="image/*">
-        <p class="loading" id="loadingText">กำลังส่งรูปไปให้ AI วิเคราะห์... (อาจใช้เวลา 1-2 นาทีหากเซิร์ฟเวอร์เพิ่งตื่น)</p>
-        <p id="resultText"></p>
+        <h1>AI Inventory Counter</h1>
+        <p class="subtitle">วิเคราะห์และนับจำนวนสินค้าบนชั้นวางด้วย YOLOv8</p>
+
+        <label for="uploadInput" class="upload-area">
+            <button class="custom-upload-btn">คลิกเพื่อเลือกรูปภาพ</button>
+            <input type="file" id="uploadInput" accept="image/*">
+            <p style="margin-top: 10px; color: #adb5bd;">รองรับไฟล์ JPEG, PNG (แนะนำให้เป็นรูปชั้นวางสินค้า)</p>
+        </label>
+
+        <div id="statusDisplay"></div>
 
         <div id="imageWrapper">
-            <img id="previewImage" src="" alt="">
+            <img id="previewImage" src="" alt="Image Preview">
             <canvas id="overlayCanvas"></canvas>
         </div>
     </div>
 
     <script>
         // ==========================================
-        //  ใส่ URL ของ RENDER ตรงนี้ !!!
+        // ตรวจสอบ URL นี้ให้ถูกต้อง (รวมถึง /detect)
         // ==========================================
         const API_URL = "https://yolo-backend-api.onrender.com/detect"; 
 
@@ -36,30 +176,41 @@
         const img = document.getElementById('previewImage');
         const canvas = document.getElementById('overlayCanvas');
         const ctx = canvas.getContext('2d');
-        const loading = document.getElementById('loadingText');
-        const resultText = document.getElementById('resultText');
-
+        const statusDisplay = document.getElementById('statusDisplay');
+        const imageWrapper = document.getElementById('imageWrapper');
+        
+        // --- Event Listener เมื่อผู้ใช้อัปโหลดรูป ---
         input.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            // แสดงรูปตัวอย่าง
+            // 1. เคลียร์สถานะและเตรียมหน้าจอ
+            statusDisplay.className = 'status-loading';
+            statusDisplay.innerText = "⏳ กำลังอัปโหลดและส่งให้ AI วิเคราะห์... (โปรดรอ)";
+            
+            // 2. แสดงรูปตัวอย่าง
             const url = URL.createObjectURL(file);
             img.src = url;
+            
             img.onload = () => {
-                // ปรับขนาด Canvas ให้เท่ารูป
+                // ต้องปรับขนาด Canvas ให้เท่ากับขนาดการแสดงผลของรูป (client size)
                 canvas.width = img.clientWidth;
                 canvas.height = img.clientHeight;
-                ctx.clearRect(0, 0, canvas.width, canvas.height); // ล้างรูปเก่า
                 
-                // เริ่มส่งข้อมูล
+                // เก็บขนาดจริง (natural size) ไว้ใน Element เพื่อใช้คำนวณ scale
+                img.setAttribute('data-natural-width', img.naturalWidth);
+                img.setAttribute('data-natural-height', img.naturalHeight);
+                
+                imageWrapper.style.display = 'inline-block';
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // 3. เริ่มส่งข้อมูล
                 processImage(file);
             };
         });
 
+        // --- ฟังก์ชันส่งรูปไปประมวลผล ---
         async function processImage(file) {
-            loading.style.display = 'block';
-            resultText.innerText = "";
             
             const formData = new FormData();
             formData.append("file", file);
@@ -69,45 +220,79 @@
                     method: "POST",
                     body: formData
                 });
-
-                if (!response.ok) throw new Error("API Error");
+                
+                // ถ้าสถานะ HTTP ไม่ใช่ 2xx
+                if (!response.ok) {
+                    let errorMsg = `Server Error (${response.status})`;
+                    try {
+                        const errorData = await response.json();
+                        errorMsg = errorData.error || errorMsg;
+                    } catch (e) {
+                        // ignore JSON parse error if response body is not JSON
+                    }
+                    throw new Error(errorMsg);
+                }
 
                 const data = await response.json();
                 drawBoxes(data.detections);
                 
-                resultText.innerText = `เจอวัตถุทั้งหมด: ${data.detections.length} ชิ้น`;
+                statusDisplay.className = 'status-success';
+                statusDisplay.innerText = `✅ วิเคราะห์สำเร็จ! พบวัตถุที่ตรวจจับได้ทั้งหมด: ${data.detections.length} ชิ้น`;
 
             } catch (error) {
-                console.error(error);
-                resultText.innerText = "เกิดข้อผิดพลาด: " + error.message;
-            } finally {
-                loading.style.display = 'none';
+                console.error("Fetch Error:", error);
+                statusDisplay.className = 'status-error';
+                statusDisplay.innerText = `❌ เกิดข้อผิดพลาด: ${error.message}. (ตรวจสอบ Render Logs เพื่อหาสาเหตุ)`;
             }
         }
 
+        // --- ฟังก์ชันวาด Bounding Box ---
         function drawBoxes(detections) {
-            // คำนวณสัดส่วนรูปจริง vs รูปที่แสดงบนจอ (เผื่อรูปถูกย่อ)
-            const scaleX = canvas.width / img.naturalWidth;
-            const scaleY = canvas.height / img.naturalHeight;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
 
+            // ดึงขนาดจริงของรูปจาก Attribute ที่เราเก็บไว้
+            const naturalWidth = parseInt(img.getAttribute('data-natural-width'));
+            const naturalHeight = parseInt(img.getAttribute('data-natural-height'));
+
+            // คำนวณสัดส่วนการย่อ/ขยาย
+            const scaleX = canvas.width / naturalWidth;
+            const scaleY = canvas.height / naturalHeight;
+            
             detections.forEach(det => {
+                // พิกัดที่ได้จาก AI (Original size)
                 const [x1, y1, x2, y2] = det.box;
                 
-                // ปรับพิกัดตามขนาดหน้าจอ
+                // 1. ปรับพิกัดตามขนาดรูปที่แสดงผลบนจอ
                 const rectX = x1 * scaleX;
                 const rectY = y1 * scaleY;
                 const rectW = (x2 - x1) * scaleX;
                 const rectH = (y2 - y1) * scaleY;
+                
+                const confidence = Math.round(det.confidence * 100);
 
-                // วาดกรอบ
-                ctx.strokeStyle = "#00FF00";
+                // 2. วาดกรอบ
+                ctx.strokeStyle = var(--success-color);
                 ctx.lineWidth = 3;
                 ctx.strokeRect(rectX, rectY, rectW, rectH);
 
-                // วาดป้ายชื่อ
-                ctx.fillStyle = "#00FF00";
-                ctx.font = "16px Arial";
-                ctx.fillText(`${det.label} ${Math.round(det.confidence*100)}%`, rectX, rectY - 5);
+                // 3. วาดป้ายชื่อ
+                const labelText = `${det.label} ${confidence}%`;
+                ctx.fillStyle = var(--success-color);
+                ctx.font = "600 14px Poppins"; 
+                
+                // คำนวณขนาดพื้นหลังป้าย
+                const textMetrics = ctx.measureText(labelText);
+                const textWidth = textMetrics.width;
+                const textHeight = 20;
+                const textPadding = 5;
+
+                // วาดพื้นหลังป้าย (เพื่อให้อ่านง่ายบนพื้นหลังรูปภาพทุกสี)
+                ctx.fillRect(rectX, rectY - textHeight, textWidth + (textPadding * 2), textHeight);
+
+                // เขียนข้อความ
+                ctx.fillStyle = "white";
+                ctx.fillText(labelText, rectX + textPadding, rectY - 5);
             });
         }
     </script>
