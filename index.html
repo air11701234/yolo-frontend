@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI ตรวจจับวัตถุ</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; text-align: center; }
+        .container { max-width: 800px; margin: 0 auto; }
+        #imageWrapper { position: relative; display: inline-block; margin-top: 20px; }
+        img { max-width: 100%; display: block; }
+        canvas { position: absolute; top: 0; left: 0; }
+        .loading { color: blue; font-weight: bold; display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ระบบนับสินค้าด้วย AI (YOLOv8)</h1>
+        <input type="file" id="uploadInput" accept="image/*">
+        <p class="loading" id="loadingText">กำลังส่งรูปไปให้ AI วิเคราะห์... (อาจใช้เวลา 1-2 นาทีหากเซิร์ฟเวอร์เพิ่งตื่น)</p>
+        <p id="resultText"></p>
+
+        <div id="imageWrapper">
+            <img id="previewImage" src="" alt="">
+            <canvas id="overlayCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        //  ใส่ URL ของ RENDER ตรงนี้ !!!
+        // ==========================================
+        const API_URL = "https://ชื่อโปรเจกต์ของคุณ.onrender.com/detect"; 
+
+        const input = document.getElementById('uploadInput');
+        const img = document.getElementById('previewImage');
+        const canvas = document.getElementById('overlayCanvas');
+        const ctx = canvas.getContext('2d');
+        const loading = document.getElementById('loadingText');
+        const resultText = document.getElementById('resultText');
+
+        input.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // แสดงรูปตัวอย่าง
+            const url = URL.createObjectURL(file);
+            img.src = url;
+            img.onload = () => {
+                // ปรับขนาด Canvas ให้เท่ารูป
+                canvas.width = img.clientWidth;
+                canvas.height = img.clientHeight;
+                ctx.clearRect(0, 0, canvas.width, canvas.height); // ล้างรูปเก่า
+                
+                // เริ่มส่งข้อมูล
+                processImage(file);
+            };
+        });
+
+        async function processImage(file) {
+            loading.style.display = 'block';
+            resultText.innerText = "";
+            
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error("API Error");
+
+                const data = await response.json();
+                drawBoxes(data.detections);
+                
+                resultText.innerText = `เจอวัตถุทั้งหมด: ${data.detections.length} ชิ้น`;
+
+            } catch (error) {
+                console.error(error);
+                resultText.innerText = "เกิดข้อผิดพลาด: " + error.message;
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function drawBoxes(detections) {
+            // คำนวณสัดส่วนรูปจริง vs รูปที่แสดงบนจอ (เผื่อรูปถูกย่อ)
+            const scaleX = canvas.width / img.naturalWidth;
+            const scaleY = canvas.height / img.naturalHeight;
+
+            detections.forEach(det => {
+                const [x1, y1, x2, y2] = det.box;
+                
+                // ปรับพิกัดตามขนาดหน้าจอ
+                const rectX = x1 * scaleX;
+                const rectY = y1 * scaleY;
+                const rectW = (x2 - x1) * scaleX;
+                const rectH = (y2 - y1) * scaleY;
+
+                // วาดกรอบ
+                ctx.strokeStyle = "#00FF00";
+                ctx.lineWidth = 3;
+                ctx.strokeRect(rectX, rectY, rectW, rectH);
+
+                // วาดป้ายชื่อ
+                ctx.fillStyle = "#00FF00";
+                ctx.font = "16px Arial";
+                ctx.fillText(`${det.label} ${Math.round(det.confidence*100)}%`, rectX, rectY - 5);
+            });
+        }
+    </script>
+</body>
+</html>
