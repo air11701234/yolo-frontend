@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI Inventory Counter</title>
-    <!-- ฟอนต์สวยๆ -->
     <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;600;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     
     <style>
+        /* CSS โค้ดเดิมทั้งหมด (ไม่ได้เปลี่ยนแปลง) */
         :root {
             --primary: #00f2ff; /* สีฟ้านีออน */
             --secondary: #7000ff; /* สีม่วง */
@@ -162,7 +162,6 @@
 
         /* ปุ่มเลือกไฟล์ซ่อนไว้ */
         input[type="file"] { display: none; }
-
     </style>
 </head>
 <body>
@@ -171,7 +170,6 @@
         <h1>AI Inventory Vision</h1>
         <p class="subtitle">ระบบนับสต็อกสินค้าอัจฉริยะด้วย YOLOv8</p>
 
-        <!-- พื้นที่อัปโหลด -->
         <div class="upload-zone" id="dropZone">
             <span class="icon-folder">📁</span>
             <div class="upload-text">คลิกเพื่อเลือกรูป หรือ ลากไฟล์มาวางที่นี่</div>
@@ -179,10 +177,8 @@
         </div>
         <input type="file" id="fileInput" accept="image/*">
 
-        <!-- ข้อความสถานะ -->
         <div class="status-text" id="statusText"></div>
 
-        <!-- ส่วนแสดงรูปและผลลัพธ์ -->
         <div id="displayArea">
             <div class="image-container" id="imgWrapper">
                 <img id="previewImg" src="">
@@ -199,10 +195,12 @@
     </div>
 
     <script>
-        // ==========================================
-        //  URL API ของคุณ (แก้ตรงนี้ถ้าเปลี่ยนลิ้งค์)
-        // ==========================================
-        const API_URL = "https://yolo-backend-api.onrender.com/detect";
+        // =================================================================
+        // แก้ไข URL API
+        // SERVER_ROOT_URL คือ URL หลักของ Render (เช่น https://yolo-backend-api.onrender.com)
+        // =================================================================
+        const SERVER_ROOT_URL = "https://yolo-backend-api.onrender.com"; 
+        const DETECT_ENDPOINT = SERVER_ROOT_URL + "/detect";
 
         const fileInput = document.getElementById('fileInput');
         const dropZone = document.getElementById('dropZone');
@@ -271,27 +269,29 @@
             imgWrapper.classList.add('loading'); // เริ่ม Animation สแกน
             
             // Step 1: ปลุก Server (Ping)
+            // ยิง GET ไปที่ URL หลักของ Server (/) เพื่อแก้ปัญหา 405/Cold Start
             showStatus("⏳ กำลังเชื่อมต่อกับสมอง AI (อาจใช้เวลา 1 นาทีถ้า Server หลับอยู่)...", "process");
             
             try {
-                // ยิงไปเช็คก่อนว่าตื่นยัง
-                const wakeUp = await fetch(API_URL, { method: 'GET' });
-                if(!wakeUp.ok) throw new Error("Server ไม่ตอบสนอง");
+                // GET request สำหรับ Ping/Wake-Up (ใช้ Root URL)
+                const wakeUp = await fetch(SERVER_ROOT_URL, { method: 'GET' });
+                
+                if(!wakeUp.ok) throw new Error(`Server ไม่ตอบสนอง (HTTP ${wakeUp.status})`);
 
-                // Step 2: ส่งรูปภาพ
+                // Step 2: ส่งรูปภาพ (POST request ไปที่ /detect)
                 showStatus("🚀 Server พร้อมแล้ว! กำลังวิเคราะห์สินค้า...", "process");
 
                 const formData = new FormData();
                 formData.append("file", file);
 
-                const response = await fetch(`${API_URL}/detect`, {
+                const response = await fetch(DETECT_ENDPOINT, { // ใช้ DETECT_ENDPOINT
                     method: "POST",
                     body: formData
                 });
 
                 if (!response.ok) {
                     const errData = await response.text();
-                    throw new Error(`API Error: ${errData}`);
+                    throw new Error(`API Error: ${response.status} - ${errData}`);
                 }
 
                 const data = await response.json();
@@ -304,7 +304,7 @@
                 drawBoxes(data.detections);
                 
                 // โชว์ตัวเลข
-                countNum.innerText = data.count;
+                countNum.innerText = data.count; // ดึงค่า count จาก Backend
                 resultBox.style.display = 'block';
 
             } catch (error) {
@@ -313,7 +313,9 @@
                 
                 let msg = error.message;
                 if(msg.includes("Failed to fetch")) {
-                    msg = "ไม่สามารถติดต่อ Server ได้ (เน็ตหลุด หรือ Server ยังไม่ตื่น)";
+                    msg = "ไม่สามารถติดต่อ Server ได้ (เน็ตหลุด, CORS, หรือ Server ยังไม่ตื่น)";
+                } else if (msg.includes("405")) {
+                    msg = "การเชื่อมต่อถูกปฏิเสธ (405 Method Not Allowed) - กรุณาตรวจสอบ URL";
                 }
                 showStatus(`❌ เกิดข้อผิดพลาด: ${msg}`, "error");
             }
@@ -323,6 +325,8 @@
             const scaleX = canvas.width / img.naturalWidth;
             const scaleY = canvas.height / img.naturalHeight;
 
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+            
             detections.forEach(det => {
                 const [x1, y1, x2, y2] = det.box;
                 
@@ -345,16 +349,21 @@
                 const text = `${det.label} ${Math.round(det.confidence * 100)}%`;
                 ctx.font = "600 12px Inter";
                 const textWidth = ctx.measureText(text).width;
-                ctx.fillRect(rectX, rectY - 20, textWidth + 10, 20);
+                const textPadding = 5;
+                const textHeight = 20;
+                
+                // วาดพื้นหลัง
+                ctx.fillRect(rectX, rectY - textHeight, textWidth + (textPadding * 2), textHeight);
 
+                // เขียนข้อความ
                 ctx.fillStyle = "#000";
-                ctx.fillText(text, rectX + 5, rectY - 6);
+                ctx.fillText(text, rectX + textPadding, rectY - 6);
             });
         }
 
         function showStatus(text, type) {
             statusText.innerText = text;
-            statusText.className = "status-text"; // ล้าง class เก่า
+            statusText.className = "status-text"; 
             if (type === "process") statusText.classList.add("text-process");
             if (type === "error") statusText.classList.add("text-error");
             if (type === "success") statusText.classList.add("text-success");
